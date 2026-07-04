@@ -157,6 +157,18 @@ def graph_stats(gid: str, x_user: str | None = Header(None)):
     return service.graph_stats(gid)
 
 
+@app.get("/api/graphs/{gid}/discover")
+def discover(gid: str, topic: str, x_user: str | None = Header(None)):
+    _require(gid, _user(x_user))
+    t = (topic or "").strip()
+    if not t:
+        raise HTTPException(400, "пустая тема")
+    try:
+        return service.discover(gid, t)
+    except Exception as e:
+        raise HTTPException(500, f"ошибка discovery: {e!r}")
+
+
 @app.get("/api/graphs/{gid}/docs/{paper_ref:path}")
 def get_doc(gid: str, paper_ref: str, x_user: str | None = Header(None)):
     _require(gid, _user(x_user))

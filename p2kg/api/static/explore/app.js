@@ -789,6 +789,30 @@ function graphAnswer(hits,q) {
   return html;
 }
 
+// ── Поиск внешних публикаций (Crossref), которых нет в базе Норникеля ─────
+async function sendDiscover(){
+  const input=document.getElementById('chat-q'), q=input.value.trim();
+  if(!q) return; input.value='';
+  const msgs=document.getElementById('chat-msgs');
+  msgs.innerHTML+='<div class="msg-u">🌐 '+esc(q)+'</div><div class="msg-a thinking" id="thinking">Ищу в мировой литературе (Crossref)...</div>';
+  msgs.scrollTop=msgs.scrollHeight;
+  let html;
+  try{
+    const resp=await fetch(P2KG_API+'/api/graphs/'+encodeURIComponent(P2KG_GID)+'/discover?topic='+encodeURIComponent(q));
+    const d=await resp.json(); const res=d.results||[];
+    if(!res.length){ html='По теме не нашлось внешних публикаций (или все уже в базе).'; }
+    else{
+      html='<strong>Внешние публикации, которых нет в базе</strong> <span style="opacity:.5;font-size:11px">(запрос: '+esc(d.query||q)+')</span>:<ul>'+
+        res.map(r=>'<li style="margin-bottom:5px"><a href="'+esc(r.url||'#')+'" target="_blank" style="color:var(--blue-glow);font-weight:600">'+esc(r.title)+'</a>'+
+          (r.year?' <span style="opacity:.6">('+r.year+')</span>':'')+(r.venue?' — <em>'+esc(r.venue)+'</em>':'')+
+          (r.authors?'<br><span style="opacity:.55;font-size:11px">'+esc(r.authors)+'</span>':'')+'</li>').join('')+'</ul>'+
+        '<div style="font-size:10.5px;color:var(--text-faint);margin-top:4px">Источник: Crossref · кандидаты на добавление, требуют проверки экспертом</div>';
+    }
+  }catch(e){ html='Не удалось получить внешние источники.'; }
+  document.getElementById('thinking').outerHTML='<div class="msg-a">'+html+'</div>';
+  msgs.scrollTop=msgs.scrollHeight;
+}
+
 // ── Загрузка легенды/рёбер, автозапуск ──────────────────────────────────
 initUI();
 setTimeout(()=>document.getElementById('chat-q')?.focus(),300);

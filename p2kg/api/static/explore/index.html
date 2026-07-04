@@ -320,6 +320,7 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;bac
     <input id="chat-q" placeholder="Вопрос или тема обзора..." onkeydown="if(event.key==='Enter')sendChat()">
     <button onclick="sendChat()" title="Спросить ИИ по графу"><span class="icon" data-icon="arrowRight"></span></button>
     <button class="chat-lit-btn" onclick="sendLitReview()" title="Собрать литературный обзор по теме"><span class="icon" data-icon="books"></span></button>
+    <button class="chat-lit-btn" onclick="sendDiscover()" title="Найти внешние публикации (Crossref), которых нет в базе" style="background:rgba(48,209,88,0.22)!important;color:#5be584!important">🌐</button>
   </div>
 </div>
 

@@ -79,3 +79,51 @@ def get_doc(graph_id: str, paper_ref: str) -> dict | None:
 def graph_stats(graph_id: str) -> dict:
     g = build_deps(graph_id).graph
     return g.stats() if hasattr(g, "stats") else {}
+
+
+def discover(graph_id: str, topic: str, n: int = 6) -> dict:
+    """Поиск внешних публикаций по теме, которых НЕТ в нашем корпусе.
+    LLM формирует англоязычный научный запрос -> Crossref (реальные публикации, без ключа) ->
+    дедуп против названий нашего корпуса. Наружу уходит только строка-запрос, не данные корпуса."""
+    import httpx
+    from ..llm.steps import DEFAULT_MODEL
+    deps = build_deps(graph_id)
+    q = topic
+    try:
+        q = (deps.llm.complete(
+            "Преобразуй тему в короткий английский научный поисковый запрос (3–6 слов) для базы публикаций. "
+            "Верни ТОЛЬКО запрос, без кавычек.\nТема: " + topic, model=DEFAULT_MODEL) or topic).strip().strip('"')[:120]
+    except Exception:
+        q = topic
+    try:
+        r = httpx.get("https://api.crossref.org/works",
+                      params={"query": q, "rows": n * 2,
+                              "select": "title,author,issued,container-title,DOI,URL"},
+                      headers={"User-Agent": "nauchny-klubok/1.0 (mailto:demo@example.com)"}, timeout=20.0)
+        items = r.json().get("message", {}).get("items", [])
+    except Exception as e:
+        return {"topic": topic, "query": q, "results": [], "error": repr(e)[:160]}
+    try:
+        existing = [x.lower() for x in deps.docs.list_papers()]
+    except Exception:
+        existing = []
+    out = []
+    for it in items:
+        title = (it.get("title") or [""])[0]
+        if not title:
+            continue
+        tl = title.lower()
+        if any(tl[:28] in e or e[:28] in tl for e in existing):   # грубый дедуп против корпуса
+            continue
+        authors = ", ".join(x for x in
+                            [((a.get("given", "") + " " + a.get("family", "")).strip()) for a in (it.get("author") or [])[:3]] if x)
+        year = None
+        try:
+            year = it["issued"]["date-parts"][0][0]
+        except Exception:
+            pass
+        out.append({"title": title, "authors": authors, "year": year,
+                    "venue": (it.get("container-title") or [""])[0], "doi": it.get("DOI"), "url": it.get("URL")})
+        if len(out) >= n:
+            break
+    return {"topic": topic, "query": q, "results": out}
