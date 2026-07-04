@@ -253,19 +253,45 @@ def _decompose(deps, question: str) -> list[str]:
         return [question]
 
 
+_REL_KEEP = 0.85     # доля от лучшего score под-темы: что слабее — это хвост, отсекаем (шумовые доки)
+
+
+def _interleave(a: list, b: list) -> list:
+    """Чередуем два списка (числовые / прочие факты), сохраняя внутренний порядок: числовые
+    получают ~половину окна и не вытесняются, но качественный контекст остаётся."""
+    out, i, j = [], 0, 0
+    while i < len(a) or j < len(b):
+        if i < len(a):
+            out.append(a[i]); i += 1
+        if j < len(b):
+            out.append(b[j]); j += 1
+    return out
+
+
 def _retrieve_vector(deps, question: str, k: int) -> RetrieveResult:
     subs = _decompose(deps, question)
     qvecs = deps.embed.encode(subs)
-    per = max(4, (k // max(1, len(subs))) + 2)
-    lists = [deps.graph.search_facts(v, per) for v in qvecs]
+    per = max(12, (k // max(1, len(subs))) + 8)          # шире выборка на под-тему -> выше recall
+    lists, meta = [], {}                                 # meta: uuid -> {"qty": есть ли число}
+    for v in qvecs:
+        rows = deps.graph.search_facts(v, per)           # отсортированы по score DESC
+        if rows:
+            best = rows[0].get("score") or 0.0           # порог релевантности относительный (к масштабу
+            kept = [r for r in rows if (r.get("score") or 0.0) >= best * _REL_KEEP]  # индекса не привязан)
+            rows = kept if len(kept) >= 4 else rows[:max(4, len(kept))]   # но не оставляем пусто
+        lists.append([{"uuid": r["uuid"]} for r in rows])
+        for r in rows:
+            meta.setdefault(r["uuid"], {"qty": r.get("qv") is not None})
     # PPR (структурный обход графа через GDS): якоря = топ-сущности по под-темам -> факты, связанные
     # с ними по рёбрам (+ мост по key даёт кросс-док). Второй сигнал рядом с вектором.
     if hasattr(deps.graph, "ppr"):
         try:
-            anchors = {e["uuid"] for v in qvecs for e in deps.graph.search_entities(v, 4)}
-            ppr = deps.graph.ppr(anchors, k=max(k, 20))
+            anchors = {e["uuid"] for v in qvecs for e in deps.graph.search_entities(v, 5)}
+            ppr = deps.graph.ppr(anchors, k=max(k, 25))
             if ppr:
                 lists.append([{"uuid": r["uuid"]} for r in ppr])
+                for r in ppr:
+                    meta.setdefault(r["uuid"], {"qty": r.get("q_value") is not None})
         except Exception:
             pass   # нет GDS / ошибка -> работаем на одном векторе
     # round-robin по сигналам: каждая тема/сигнал представлены, один не забивает top-k (диверсификация)
@@ -275,7 +301,11 @@ def _retrieve_vector(deps, question: str, k: int) -> RetrieveResult:
             if i < len(l) and l[i]["uuid"] not in seen:
                 seen.add(l[i]["uuid"])
                 order.append(l[i]["uuid"])
-    top = order[:max(k, len(subs) * 3)]
+    # число-предпочтение: факты с q_value чередуем с остальными, чтобы числовые не вытеснялись из окна
+    qty = [u for u in order if meta.get(u, {}).get("qty")]
+    rest = [u for u in order if not meta.get(u, {}).get("qty")]
+    order = _interleave(qty, rest)
+    top = order[:max(k, len(subs) * 4)]
     detail = deps.graph.facts_with_participants(top)
     ev, related, seenr = [], [], set()
     for u in top:
@@ -320,7 +350,7 @@ def _trace_graph(res: RetrieveResult) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
-def answer(deps, question: str, *, k: int = 8) -> dict:
+def answer(deps, question: str, *, k: int = 16) -> dict:
     """Полный путь: ретрив + LLM-синтез. Числа — из evidence, не из модели. + подграф трейса."""
     res = retrieve(deps, question, k=k)
     evidence = [{"statement": e.statement, "value": e.quantity, "participants": e.participants,

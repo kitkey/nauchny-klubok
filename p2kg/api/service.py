@@ -64,7 +64,7 @@ def ingest_pdf(graph_id: str, path: str, paper_ref: str | None = None, supersede
             "edges": len(st.edges), "status": dict(st.stage_status)}
 
 
-def ask(graph_id: str, question: str, k: int = 8) -> dict:
+def ask(graph_id: str, question: str, k: int = 16) -> dict:
     return _retrieve.answer(build_deps(graph_id), question, k=k)
 
 

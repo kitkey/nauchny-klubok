@@ -141,7 +141,7 @@ def ask(gid: str, body: dict = Body(...), x_user: str | None = Header(None)):
     if not q:
         raise HTTPException(400, "пустой вопрос")
     try:
-        return service.ask(gid, q, k=int(body.get("k", 8)))
+        return service.ask(gid, q, k=int(body.get("k", 16)))
     except Exception as e:
         raise HTTPException(500, f"ошибка ретрива: {e!r}")
 
