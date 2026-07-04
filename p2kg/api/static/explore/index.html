@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Граф знаний R&D — Норникель</title>
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+:root{
+  --font: -apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --bg:#05070a; --panel:rgba(16,20,27,0.88); --card:rgba(255,255,255,0.05); --card-b:rgba(255,255,255,0.09);
+  --text:#f2f4f8; --text-dim:rgba(230,236,245,0.6); --text-faint:rgba(230,236,245,0.35);
+  --blue:#0290f0; --blue-mid:#0077c8; --blue-deep:#004c97; --blue-glow:#4fc0ff;
+  --green:#30d158; --red:#d70c1e; --orange:#ff9f0a; --purple:#bf5af2; --pink:#ff375f; --yellow:#ffd60a; --cyan:#64d2ff;
+  --noise:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+html,body{height:100%;font-family:var(--font);background:radial-gradient(ellipse at top,#1b212b 0%,#0a0d12 55%,#020304 100%);color:var(--text);overflow:hidden}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;background-image:var(--noise);background-size:140px 140px;opacity:.05;mix-blend-mode:overlay}
+
+/* ── Graph canvas ── */
+#net{position:fixed;inset:0 400px 0 0;background:transparent}
+
+/* ── Loading overlay ── */
+#loading{position:fixed;inset:0 400px 0 0;z-index:100;display:flex;align-items:center;justify-content:center;background:#000;flex-direction:column;gap:16px}
+#loading-text{font-size:14px;font-weight:600;color:var(--text-dim)}
+#loading-bar-wrap{width:220px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden}
+#loading-bar{height:100%;background:linear-gradient(90deg,var(--blue-deep),var(--blue));border-radius:2px;width:0%;transition:width 0.3s}
+
+/* ── Floating controls (top-left) ── */
+#ctrls{position:fixed;top:16px;left:16px;z-index:50;display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:calc(100vw - 420px)}
+.cbtn{font-family:var(--font);font-size:12px;font-weight:600;padding:9px 15px;border:1px solid rgba(255,255,255,0.1);border-radius:14px;cursor:pointer;background-color:rgba(24,28,35,0.72);background-image:linear-gradient(180deg,rgba(255,255,255,0.09),rgba(255,255,255,0.01));color:var(--text-dim);backdrop-filter:blur(20px) saturate(1.8);-webkit-backdrop-filter:blur(20px) saturate(1.8);box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 4px 14px rgba(0,0,0,0.32);transition:all .2s cubic-bezier(.4,0,.2,1);white-space:nowrap}
+.cbtn:hover{background-color:rgba(38,43,51,0.85);color:#fff;transform:translateY(-1px)}
+.cbtn:active{transform:translateY(0);box-shadow:inset 0 1px 6px rgba(0,0,0,0.4)}
+.cbtn.on{background-image:linear-gradient(180deg,rgba(2,144,240,0.4),rgba(2,144,240,0.16));color:#bfe4ff;border-color:rgba(2,144,240,0.5)}
+
+/* ── Brand mark (top area) ── */
+#brand{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:40;text-align:center;pointer-events:none}
+#brand .bt{font-size:13px;font-weight:700;color:rgba(255,255,255,0.85);letter-spacing:.2px}
+#brand .bs{font-size:10px;color:var(--text-faint);font-weight:500}
+
+/* ── Edge legend (bottom-left) ── */
+#edge-leg{position:fixed;bottom:16px;left:16px;z-index:50;background-color:var(--panel);background-image:var(--noise);background-blend-mode:overlay;backdrop-filter:blur(24px) saturate(1.8);-webkit-backdrop-filter:blur(24px) saturate(1.8);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:14px 16px;min-width:210px;max-height:calc(100vh - 100px);overflow-y:auto;box-shadow:inset 0 1px 0 rgba(255,255,255,0.06),0 14px 34px rgba(0,0,0,0.4)}
+#edge-leg::-webkit-scrollbar{width:3px}
+#edge-leg::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:2px}
+.el-title{font-size:10px;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.el-body.closed{display:none}
+.el-row{display:flex;align-items:center;gap:9px;padding:4px 6px;border-radius:9px;cursor:pointer;transition:background .15s;user-select:none}
+.el-row:hover{background:rgba(255,255,255,0.06)}
+.el-row.off .el-lbl{opacity:.3;text-decoration:line-through}
+.el-row.off .el-line{opacity:.2}
+.el-line{width:22px;height:2px;border-radius:1px;flex-shrink:0}
+.el-lbl{font-size:11px;font-weight:500;color:var(--text-dim)}
+
+/* ── Compare pill (bottom-center) ── */
+#cmp-pill{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:60;display:none;align-items:center;gap:10px;background:rgba(191,90,242,0.22);border:1px solid rgba(191,90,242,0.5);backdrop-filter:blur(20px);border-radius:18px;padding:9px 16px;cursor:pointer;font-size:12px;font-weight:700;color:#e0b8ff;box-shadow:inset 0 1px 0 rgba(255,255,255,0.12),0 10px 26px rgba(0,0,0,0.4)}
+#cmp-pill:hover{background:rgba(191,90,242,0.32)}
+.cmp-count{background:#bf5af2;color:#fff;border-radius:10px;padding:1px 8px;font-size:11px}
+
+/* ── Right panel ── */
+#panel{position:fixed;inset:0 0 0 auto;width:400px;background-color:var(--panel);background-image:var(--noise);background-blend-mode:overlay;backdrop-filter:blur(30px) saturate(1.8);-webkit-backdrop-filter:blur(30px) saturate(1.8);border-left:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;overflow:hidden;box-shadow:-18px 0 50px rgba(0,0,0,0.35)}
+#ph{padding:20px 20px 0;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0}
+.pt{font-size:19px;font-weight:800;color:#fff;letter-spacing:-.4px}
+.ps{font-size:11px;color:var(--text-faint);font-weight:600;margin-top:2px;margin-bottom:14px;text-transform:uppercase;letter-spacing:.4px}
+.sw{position:relative;margin-bottom:12px}
+.sw input{width:100%;padding:11px 38px 11px 14px;background:rgba(118,118,128,0.18);border:1px solid rgba(255,255,255,0.08);border-radius:13px;color:#fff;font-family:var(--font);font-size:13px;font-weight:500;outline:none;transition:border-color .2s}
+.sw input:focus{border-color:rgba(2,144,240,0.6);background:rgba(2,144,240,0.08)}
+.sw input::placeholder{color:rgba(235,235,245,0.28)}
+.sw .si{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:rgba(235,235,245,0.28);font-size:16px;cursor:pointer}
+
+/* Segmented tab control — iOS style */
+.tabs{display:flex;gap:2px;padding:3px;margin:0 0 14px;background:rgba(118,118,128,0.16);border-radius:12px;box-shadow:inset 0 1px 4px rgba(0,0,0,0.35)}
+.tab{flex:1;text-align:center;font-family:var(--font);font-size:12px;font-weight:600;padding:8px 6px;cursor:pointer;color:var(--text-dim);border-radius:9px;transition:all .25s cubic-bezier(.4,0,.2,1)}
+.tab.on{color:#fff;background-image:linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0.04));box-shadow:inset 0 1px 0 rgba(255,255,255,0.15),0 2px 8px rgba(0,0,0,0.35)}
+.tab:hover:not(.on){color:#fff}
+
+#pb{flex:1;overflow-y:auto;overflow-x:hidden;padding:14px 18px}
+#pb::-webkit-scrollbar{width:3px}
+#pb::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+
+/* ── iOS-style cards, matte + rough surface with a glossy top sheen for volume ── */
+.card{position:relative;overflow:hidden;background-color:var(--card);background-image:var(--noise),linear-gradient(165deg,rgba(255,255,255,0.07),rgba(255,255,255,0.005) 45%);background-blend-mode:overlay,normal;border-radius:18px;padding:16px;margin-bottom:11px;border:1px solid var(--card-b);box-shadow:inset 0 1px 0 rgba(255,255,255,0.06),inset 0 -14px 24px -18px rgba(0,0,0,0.6),0 10px 26px -10px rgba(0,0,0,0.5)}
+.ct{font-size:10px;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px}
+
+.sr{display:flex;gap:7px}
+.sb{flex:1;background:rgba(118,118,128,0.12);border-radius:13px;padding:11px 6px;text-align:center;border:1px solid rgba(255,255,255,0.05);box-shadow:inset 0 1px 0 rgba(255,255,255,0.05),inset 0 -6px 10px -8px rgba(0,0,0,0.5)}
+.sn{font-size:22px;font-weight:800;color:#fff;line-height:1}
+.sl{font-size:10px;font-weight:600;color:var(--text-faint);margin-top:3px}
+
+.fcs{display:flex;flex-wrap:wrap;gap:5px}
+.fc{padding:5px 11px;border-radius:20px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;transition:all .18s;border:1.5px solid transparent;user-select:none}
+.fc:hover{filter:brightness(1.25);transform:translateY(-1px)}
+.fc.dim{opacity:.28;filter:grayscale(.6)}
+.fc.on{filter:brightness(1.3)}
+
+.geo-chips{display:flex;gap:6px;margin-top:10px}
+.geo-chip{flex:1;text-align:center;padding:7px 8px;border-radius:11px;font-size:11px;font-weight:700;cursor:pointer;background:rgba(118,118,128,0.14);color:var(--text-dim);border:1px solid transparent;transition:all .2s}
+.geo-chip:hover{background:rgba(118,118,128,0.24)}
+.geo-chip.on{background:rgba(2,144,240,0.25);color:#7ec8ff;border-color:rgba(2,144,240,0.45)}
+
+#ne{text-align:center;padding:28px 10px}
+.ei{font-size:36px;margin-bottom:10px;opacity:.2;display:block}
+.ep{font-size:13px;font-weight:500;color:var(--text-faint);line-height:1.55}
+.ntc{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:20px;font-size:11px;font-weight:700;margin-bottom:10px;letter-spacing:.15px}
+.gap-flag{background:rgba(255,69,58,0.85);color:#fff;padding:1px 7px;border-radius:8px;font-size:9px;margin-left:4px}
+.nt{font-size:17px;font-weight:800;line-height:1.35;margin-bottom:4px;word-break:break-word;color:#fff}
+.ns{font-size:11px;color:var(--text-faint);font-weight:500;margin-bottom:8px}
+.pl{font-size:10px;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:.5px;margin:9px 0 3px}
+.pv{font-size:12px;color:rgba(235,235,245,0.82);line-height:1.55;background:rgba(118,118,128,0.1);border-radius:10px;padding:8px 10px;word-break:break-word;border:1px solid rgba(255,255,255,0.04)}
+
+/* Verification badges */
+.verif-row{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}
+.vbadge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:9px;border:1px solid transparent}
+.vb-date{background:rgba(118,118,128,0.18);color:var(--text-dim)}
+.src-line{font-size:10.5px;color:var(--text-faint);font-style:italic;margin-bottom:6px;line-height:1.4}
+.nd-actions{margin-top:12px}
+.mini-btn{font-family:var(--font);font-size:11px;font-weight:700;padding:7px 14px;border-radius:10px;border:none;cursor:pointer;background:rgba(191,90,242,0.2);color:#e0b8ff;transition:all .2s;width:100%}
+.mini-btn:hover{background:rgba(191,90,242,0.32)}
+
+.ni{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:10px;cursor:pointer;transition:background .14s;margin-bottom:1px}
+.ni:hover{background:rgba(118,118,128,0.16)}
+.nd{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.nn{font-size:12px;font-weight:600;color:rgba(235,235,245,0.82);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.ng{font-size:10px;color:var(--text-faint);flex-shrink:0;font-weight:500}
+
+.lgr{display:flex;flex-direction:column;gap:6px}
+.lr{display:flex;align-items:center;gap:8px}
+.ld{width:9px;height:9px;border-radius:3px;flex-shrink:0}
+.ll{font-size:12px;font-weight:500;color:rgba(235,235,245,0.65);flex:1}
+.lc{font-size:10px;font-weight:700;color:var(--text-faint);background:rgba(118,118,128,0.14);padding:1px 7px;border-radius:8px}
+
+/* Research query builder */
+.rq-field{margin-bottom:12px}
+.rq-label{font-size:11px;font-weight:700;color:var(--text-dim);margin-bottom:6px;display:block}
+.rq-field input{width:100%;padding:10px 12px;background:rgba(118,118,128,0.16);border:1px solid rgba(255,255,255,0.09);border-radius:11px;color:#fff;font-family:var(--font);font-size:12.5px;font-weight:500;outline:none}
+.rq-field input:focus{border-color:rgba(2,144,240,0.5)}
+.rq-row2{display:flex;gap:8px}
+.rq-row2 .rq-field{flex:1}
+.rq-btns{display:flex;gap:8px;margin-top:4px}
+.rq-btn-primary{flex:1;padding:11px;border:none;border-radius:12px;background-image:linear-gradient(160deg,rgba(255,255,255,0.22),rgba(255,255,255,0) 55%),linear-gradient(135deg,var(--blue-mid),var(--blue));color:#fff;font-weight:700;font-size:13px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.25),0 8px 20px -6px rgba(2,144,240,0.55);transition:all .2s}
+.rq-btn-primary:hover{filter:brightness(1.08)}
+.rq-btn-primary:active{transform:translateY(1px);box-shadow:inset 0 1px 4px rgba(0,0,0,0.35)}
+.rq-btn-reset{padding:11px 16px;border:none;border-radius:12px;background:rgba(118,118,128,0.18);color:var(--text-dim);font-weight:700;font-size:12px;cursor:pointer}
+
+/* Custom dropdown (replaces native <select> popovers) */
+.cs{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:10px 12px;background-color:rgba(118,118,128,0.16);background-image:linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0));border:1px solid rgba(255,255,255,0.09);border-radius:11px;color:#fff;font-family:var(--font);font-size:12.5px;font-weight:500;cursor:pointer;user-select:none;transition:border-color .2s,background-color .2s}
+.cs:hover{border-color:rgba(2,144,240,0.35)}
+.cs.open{border-color:rgba(2,144,240,0.6);background-color:rgba(2,144,240,0.1)}
+.cs-trigger{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.cs-arrow{font-size:10px;color:var(--text-faint);transition:transform .2s;flex-shrink:0}
+.cs.open .cs-arrow{transform:rotate(180deg);color:var(--blue-glow)}
+.cs-panel{position:fixed;z-index:300;max-height:280px;overflow-y:auto;background-color:#14181f;background-image:var(--noise),linear-gradient(165deg,rgba(255,255,255,0.06),rgba(255,255,255,0) 50%);background-blend-mode:overlay,normal;border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:6px;box-shadow:0 24px 60px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.06);animation:csIn .15s ease}
+.cs-panel::-webkit-scrollbar{width:3px}
+.cs-panel::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:2px}
+.cs-opt{padding:9px 12px;border-radius:9px;font-size:12.5px;font-weight:500;color:rgba(235,238,245,0.85);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cs-opt:hover{background:rgba(2,144,240,0.16);color:#fff}
+.cs-opt.sel{background:rgba(2,144,240,0.3);color:#fff;font-weight:700}
+@keyframes csIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.sr-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:11px;cursor:pointer;transition:background .15s;border-bottom:1px solid rgba(255,255,255,0.04)}
+.sr-item:hover{background:rgba(118,118,128,0.12)}
+.sr-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.sr-name{font-size:13px;font-weight:600;color:rgba(235,235,245,0.88);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty-hint{font-size:12px;color:var(--text-faint);text-align:center;padding:24px 10px;line-height:1.6}
+
+/* Analytics tab */
+.aif{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid rgba(255,255,255,0.05);align-items:flex-start}
+.aif:last-child{border-bottom:none;padding-bottom:0}
+.aii{font-size:22px;flex-shrink:0;line-height:1;margin-top:2px;color:#5ec2ff}
+.ain{font-size:13px;font-weight:700;color:rgba(235,235,245,0.92);margin-bottom:3px}
+.aid{font-size:11px;color:var(--text-faint);line-height:1.5;margin-bottom:8px}
+.aib{font-family:var(--font);font-size:11px;font-weight:700;padding:6px 14px;border-radius:10px;border:none;cursor:pointer;background:rgba(2,144,240,0.22);color:#5ec2ff;box-shadow:inset 0 1px 0 rgba(255,255,255,0.1);transition:all .2s}
+.aib:hover{background:rgba(2,144,240,0.35);color:#a8ddff}
+
+/* API row removed — chat uses free no-key Pollinations endpoint */
+.api-row{display:flex;gap:7px;margin-top:10px}
+
+/* ── Modal ── */
+#modal{position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.72);backdrop-filter:blur(8px);padding:20px}
+#modal.show{display:flex}
+#mbox{background-color:#12151a;background-image:var(--noise),linear-gradient(165deg,rgba(255,255,255,0.05),rgba(255,255,255,0) 40%);background-blend-mode:overlay,normal;border:1px solid rgba(255,255,255,0.1);border-radius:24px;width:100%;max-width:740px;max-height:82vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,0.06),0 30px 80px rgba(0,0,0,0.6)}
+#mhd{padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:10px}
+#mtitle{font-size:16px;font-weight:800;color:#fff;flex:1}
+#mclose{background:rgba(118,118,128,0.22);border:none;color:rgba(235,235,245,0.6);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+#mclose:hover{background:rgba(215,12,30,0.25);color:#ff5c4d}
+#mbody{padding:20px 22px;overflow-y:auto;flex:1}
+#mbody::-webkit-scrollbar{width:4px}
+#mbody::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+
+.gap-item{padding:10px 12px;border-radius:12px;background:rgba(215,12,30,0.08);border:1px solid rgba(215,12,30,0.18);margin-bottom:7px;cursor:pointer}
+.gap-name{font-size:13px;font-weight:700;color:rgba(235,235,245,0.88);margin-bottom:3px}
+.gap-desc{font-size:11px;color:var(--text-faint);line-height:1.4}
+.gap-ok{background:rgba(52,199,89,0.08);border-color:rgba(52,199,89,0.16)}
+
+.contr-card{border:1px solid rgba(215,12,30,0.22);border-radius:16px;padding:14px;margin-bottom:12px;background:rgba(215,12,30,0.06)}
+.contr-side{padding:8px;border-radius:10px;cursor:pointer;transition:background .15s}
+.contr-side:hover{background:rgba(255,255,255,0.05)}
+.contr-label{font-size:12.5px;font-weight:700;color:#fff;margin-bottom:4px}
+.contr-stmt{font-size:11.5px;color:var(--text-dim);line-height:1.5}
+.contr-vs{text-align:center;font-size:11px;font-weight:700;color:#ff5c4d;padding:4px 0}
+
+.lit-item{padding:10px 12px;border-radius:12px;background:rgba(118,118,128,0.08);border:1px solid rgba(255,255,255,0.05);margin-bottom:8px;cursor:pointer;position:relative}
+.lit-item:hover{background:rgba(118,118,128,0.15)}
+.lit-contr{border-color:rgba(215,12,30,0.32)}
+.lit-title{font-size:12.5px;font-weight:700;color:#fff;margin-bottom:3px;padding-right:60px}
+.lit-warn{color:#ff5c4d;font-weight:700;font-size:10px}
+.lit-date{position:absolute;top:10px;right:12px;font-size:10px;font-weight:700;color:var(--text-faint)}
+.lit-txt{font-size:11px;color:var(--text-dim);line-height:1.5}
+
+.hm-wrap{overflow-x:auto}
+.hm-table{border-collapse:collapse;font-size:10px;min-width:400px;width:100%}
+.hm-table th{padding:6px 9px;background:rgba(118,118,128,0.16);color:rgba(235,235,245,0.5);font-weight:700;text-align:left;white-space:nowrap;position:sticky;top:0}
+.hm-table td{padding:5px 9px;border:1px solid rgba(255,255,255,0.04);text-align:center;font-size:11px;font-weight:600;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+.hm-0{background:rgba(215,12,30,0.16);color:rgba(255,111,97,0.85)}
+.hm-1{background:rgba(255,214,10,0.12);color:rgba(255,214,10,0.75)}
+.hm-2{background:rgba(52,199,89,0.15);color:rgba(52,199,89,0.75)}
+.hm-3{background:rgba(2,144,240,0.18);color:rgba(79,192,255,0.9)}
+
+.chat-msgs{display:flex;flex-direction:column;gap:12px;margin-bottom:16px;min-height:60px}
+.msg-u{align-self:flex-end;max-width:80%;background:rgba(2,144,240,0.3);color:#cfeaff;border-radius:17px 17px 4px 17px;padding:10px 14px;font-size:13px;font-weight:500;line-height:1.5}
+.msg-a{align-self:flex-start;max-width:92%;background:rgba(44,46,54,0.85);color:rgba(235,235,245,0.88);border-radius:17px 17px 17px 4px;padding:11px 14px;font-size:13px;line-height:1.65;border:1px solid rgba(255,255,255,0.06)}
+.msg-a strong{color:var(--blue-glow);font-weight:700}
+.msg-a ul{margin:6px 0 0 16px}
+.msg-a li{margin-bottom:3px}
+.chat-inp{display:flex;gap:8px}
+.chat-inp input{flex:1;padding:11px 14px;background:rgba(118,118,128,0.18);border:1px solid rgba(255,255,255,0.1);border-radius:13px;color:#fff;font-family:var(--font);font-size:13px;font-weight:500;outline:none}
+.chat-inp input:focus{border-color:rgba(2,144,240,0.5)}
+.chat-inp button{padding:11px 18px;border:none;border-radius:13px;background:rgba(2,144,240,0.34);color:#5ec2ff;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.12);transition:all .2s}
+.chat-inp button:hover{background:rgba(2,144,240,0.5);color:#fff}
+.thinking{color:var(--text-faint);font-style:italic;font-size:12px}
+
+/* ── Floating chat widget (round FAB + panel) ── */
+#chat-fab{position:fixed;bottom:16px;right:416px;z-index:65;width:56px;height:56px;border-radius:50%;background-image:linear-gradient(160deg,rgba(255,255,255,0.35),rgba(255,255,255,0) 55%),linear-gradient(135deg,var(--blue-mid),var(--blue));display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.3),0 10px 30px rgba(2,144,240,0.45);transition:transform .2s cubic-bezier(.4,0,.2,1)}
+#chat-fab:hover{transform:scale(1.08)}
+#chat-fab.on{background-image:linear-gradient(160deg,rgba(255,255,255,0.35),rgba(255,255,255,0) 55%),linear-gradient(135deg,var(--blue),var(--blue-deep))}
+#chat-widget{position:fixed;bottom:84px;right:416px;z-index:65;width:368px;max-width:calc(100vw - 432px);height:min(560px,70vh);background-color:var(--panel);background-image:var(--noise);background-blend-mode:overlay;backdrop-filter:blur(30px) saturate(1.8);-webkit-backdrop-filter:blur(30px) saturate(1.8);border:1px solid rgba(255,255,255,0.1);border-radius:22px;display:none;flex-direction:column;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,0.06),0 24px 70px rgba(0,0,0,0.55)}
+#chat-widget.show{display:flex}
+#chat-widget-hd{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+#chat-widget-hd span{font-size:13px;font-weight:800;color:#fff}
+#chat-widget-close{background:rgba(118,118,128,0.22);border:none;color:rgba(235,235,245,0.6);width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+#chat-widget-close:hover{background:rgba(215,12,30,0.25);color:#ff5c4d}
+#chat-widget-body{flex:1;overflow-y:auto;padding:14px 16px}
+#chat-widget-body::-webkit-scrollbar{width:3px}
+#chat-widget-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+#chat-widget .chat-inp{padding:12px 14px;border-top:1px solid rgba(255,255,255,0.07);flex-shrink:0}
+.chat-lit-btn{background:rgba(191,90,242,0.24)!important;color:#e0b8ff!important}
+.chat-lit-btn:hover{background:rgba(191,90,242,0.4)!important;color:#fff!important}
+
+/* ── Node summary + JSON export ── */
+.nd-actions{margin-top:12px;display:flex;gap:6px}
+.nd-actions .mini-btn{flex:1}
+.export-btn{font-family:var(--font);font-size:11px;font-weight:700;padding:7px 12px;border-radius:10px;border:1px solid rgba(52,199,89,0.28);background:rgba(52,199,89,0.12);color:#34c759;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);transition:all .18s;flex-shrink:0}
+.export-btn:hover{background:rgba(52,199,89,0.22);border-color:rgba(52,199,89,0.45)}
+.sum-btn{background:rgba(2,144,240,0.2);color:#5ec2ff}
+.sum-btn:hover{background:rgba(2,144,240,0.32)}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+
+/* ── Icon system (replaces emoji) ── */
+.icon{display:inline-flex;align-items:center;justify-content:center;line-height:0;vertical-align:-3px;flex-shrink:0}
+.icon svg{width:16px;height:16px;display:block}
+.icon.md svg{width:20px;height:20px}
+.icon.lg svg{width:24px;height:24px}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div id="loading-text">Загружаю граф знаний…</div>
+  <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+</div>
+
+<div id="net"></div>
+
+<div id="brand">
+  <div class="bt">◎ Граф знаний R&D</div>
+  <div class="bs">Горно-металлургическая отрасль · Норникель</div>
+</div>
+
+<div id="ctrls">
+  <button class="cbtn on" id="btn-phy" onclick="togglePhysics()"><span class="icon" data-icon="atom"></span> Физика</button>
+  <button class="cbtn" onclick="fitGraph()"><span class="icon" data-icon="fit"></span> По экрану</button>
+  <button class="cbtn" id="btn-elbl" onclick="toggleEdgeLabels()"><span class="icon" data-icon="tag"></span> Подписи рёбер</button>
+  <button class="cbtn" id="btn-men" onclick="toggleMentions()"><span class="icon" data-icon="link"></span> Упоминания</button>
+</div>
+
+<div id="edge-leg">
+  <div class="el-title" onclick="document.getElementById('edge-leg-body').classList.toggle('closed')">Типы рёбер <span class="icon" data-icon="chevron"></span></div>
+  <div class="el-body" id="edge-leg-body">
+    <div class="el-row" data-et="USES_MATERIAL" onclick="toggleET(this)"><div class="el-line" style="background:#ff9f0a"></div><span class="el-lbl">Использует материал</span></div>
+    <div class="el-row" data-et="OPERATES_AT_CONDITION" onclick="toggleET(this)"><div class="el-line" style="background:#ffd60a"></div><span class="el-lbl">При условии</span></div>
+    <div class="el-row" data-et="PRODUCES_OUTPUT" onclick="toggleET(this)"><div class="el-line" style="background:#30d158"></div><span class="el-lbl">Производит</span></div>
+    <div class="el-row" data-et="VALIDATED_BY" onclick="toggleET(this)"><div class="el-line" style="background:#64d2ff"></div><span class="el-lbl">Подтверждено</span></div>
+    <div class="el-row" data-et="DESCRIBED_IN" onclick="toggleET(this)"><div class="el-line" style="background:#8e8e93"></div><span class="el-lbl">Описано в</span></div>
+    <div class="el-row" data-et="CONTRADICTS" onclick="toggleET(this)"><div class="el-line" style="background:#d70c1e"></div><span class="el-lbl">Противоречит</span></div>
+    <div class="el-row" data-et="USES_EQUIPMENT" onclick="toggleET(this)"><div class="el-line" style="background:#0290f0"></div><span class="el-lbl">Оборудование</span></div>
+    <div class="el-row" data-et="HAS_PROPERTY" onclick="toggleET(this)"><div class="el-line" style="background:#5e5ce6"></div><span class="el-lbl">Свойство</span></div>
+    <div class="el-row" data-et="AUTHORED_BY" onclick="toggleET(this)"><div class="el-line" style="background:#ff375f"></div><span class="el-lbl">Автор</span></div>
+    <div class="el-row" data-et="WORKS_AT" onclick="toggleET(this)"><div class="el-line" style="background:#ac8e68"></div><span class="el-lbl">Работает в</span></div>
+    <div class="el-row" data-et="PART_OF" onclick="toggleET(this)"><div class="el-line" style="background:#8d6e63"></div><span class="el-lbl">Часть</span></div>
+    <div class="el-row" data-et="MENTIONS" onclick="toggleET(this)"><div class="el-line" style="background:#4fc3f7"></div><span class="el-lbl">Упоминание</span></div>
+  </div>
+</div>
+
+<div id="cmp-pill" onclick="openModal('compare')"><span class="icon" data-icon="scales"></span> Сравнить (<span class="cmp-count">0</span>)</div>
+
+<div id="chat-fab" onclick="toggleChatWidget()" title="Чат и обзор по графу"><span class="icon lg" data-icon="chat"></span></div>
+<div id="chat-widget">
+  <div id="chat-widget-hd">
+    <span>Чат и обзор по графу</span>
+    <button id="chat-widget-close" onclick="toggleChatWidget()"><span class="icon" data-icon="close"></span></button>
+  </div>
+  <div id="chat-widget-body">
+    <div class="chat-msgs" id="chat-msgs">
+      <div class="msg-a"><strong>Граф готов.</strong> Задайте вопрос или тему — соберу ответ или обзор источников.<br><br><em style="font-size:11px;color:rgba(235,235,245,0.4)">Например: «оптимальная скорость циркуляции католита», «методы очистки шахтных вод», «распределение золота между штейном и шлаком»</em></div>
+    </div>
+  </div>
+  <div class="chat-inp">
+    <input id="chat-q" placeholder="Вопрос или тема обзора..." onkeydown="if(event.key==='Enter')sendChat()">
+    <button onclick="sendChat()" title="Спросить ИИ по графу"><span class="icon" data-icon="arrowRight"></span></button>
+    <button class="chat-lit-btn" onclick="sendLitReview()" title="Собрать литературный обзор по теме"><span class="icon" data-icon="books"></span></button>
+  </div>
+</div>
+
+<div id="panel">
+  <div id="ph">
+    <div class="pt">Граф знаний R&D</div>
+    <div class="ps">Команда: нефтяные triggered магнаты</div>
+    <div class="sw">
+      <input id="q" type="text" placeholder="Поиск узлов…" oninput="onSearch(this.value)" onkeydown="if(event.key==='Enter')jumpSearch()">
+      <span class="si" onclick="jumpSearch()"><span class="icon" data-icon="search"></span></span>
+    </div>
+    <div class="tabs">
+      <div class="tab on" id="tab-g" onclick="switchTab('graph')">Граф</div>
+      <div class="tab" id="tab-r" onclick="switchTab('research')">Запрос</div>
+      <div class="tab" id="tab-an" onclick="switchTab('analytics')">Аналитика</div>
+    </div>
+  </div>
+  <div id="pb">
+
+    <!-- ═══ GRAPH TAB ═══ -->
+    <div id="pane-graph">
+      <div class="card">
+        <div class="ct">Статистика</div>
+        <div class="sr"><div class="sb"><div class="sn" id="s-n">0</div><div class="sl">Узлов</div></div><div class="sb"><div class="sn" id="s-e">0</div><div class="sl">Рёбер</div></div><div class="sb"><div class="sn" id="s-g">0</div><div class="sl">Типов</div></div></div>
+      </div>
+      <div class="card">
+        <div class="ct">Фильтр по типу сущности</div>
+        <div class="fcs" id="fchips"></div>
+        <div class="ct" style="margin-top:14px">География</div>
+        <div class="geo-chips">
+          <div class="geo-chip on" id="geo-all" onclick="setGeoFilter('all',this)">Все</div>
+          <div class="geo-chip" onclick="setGeoFilter('RU',this)">РФ</div>
+          <div class="geo-chip" onclick="setGeoFilter('world',this)">Мир</div>
+        </div>
+        <button class="hb" style="margin-top:12px;width:100%;padding:8px;border-radius:11px;background:rgba(118,118,128,0.15);color:rgba(235,235,245,0.65);border:none;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer" onclick="clearAll()">Сбросить всё</button>
+      </div>
+      <div class="card" id="nc">
+        <div class="ct">Узел <span id="nc-badge" style="display:none;font-size:9px;padding:1px 7px;border-radius:6px;font-weight:700;margin-left:5px;vertical-align:middle"></span></div>
+        <div id="ne"><span class="ei">◎</span><p class="ep">Нажмите на узел на графе<br>чтобы увидеть детали, источник<br>и уровень достоверности</p></div>
+        <div id="nd" style="display:none"></div>
+      </div>
+      <div class="card" id="nbc" style="display:none">
+        <div class="ct">Связанные узлы <span id="nb-cnt" style="color:var(--text-faint);font-weight:500"></span></div>
+        <div id="nbl"></div>
+      </div>
+      <div class="card">
+        <div class="ct">Легенда типов сущностей</div>
+        <div class="lgr" id="lgr"></div>
+      </div>
+    </div>
+
+    <!-- ═══ RESEARCH QUERY TAB ═══ -->
+    <div id="pane-research" style="display:none">
+      <div class="card">
+        <div class="ct">Конструктор запроса</div>
+        <div class="rq-field">
+          <span class="rq-label">Материал</span>
+          <div class="cs" id="cs-rq-material" onclick="csToggle('rq-material')"><span class="cs-trigger" id="cs-rq-material-label">— любой —</span><span class="cs-arrow icon" data-icon="chevron"></span></div>
+          <select id="rq-material" style="display:none"></select>
+        </div>
+        <div class="rq-field">
+          <span class="rq-label">Процесс / технология</span>
+          <div class="cs" id="cs-rq-process" onclick="csToggle('rq-process')"><span class="cs-trigger" id="cs-rq-process-label">— любой —</span><span class="cs-arrow icon" data-icon="chevron"></span></div>
+          <select id="rq-process" style="display:none"></select>
+        </div>
+        <div class="rq-field">
+          <span class="rq-label">Условие</span>
+          <div class="cs" id="cs-rq-condition" onclick="csToggle('rq-condition')"><span class="cs-trigger" id="cs-rq-condition-label">— любое —</span><span class="cs-arrow icon" data-icon="chevron"></span></div>
+          <select id="rq-condition" style="display:none"></select>
+        </div>
+        <div class="rq-row2">
+          <div class="rq-field">
+            <span class="rq-label">Число ≥</span>
+            <input type="number" id="rq-num-min" placeholder="мин">
+          </div>
+          <div class="rq-field">
+            <span class="rq-label">Число ≤</span>
+            <input type="number" id="rq-num-max" placeholder="макс">
+          </div>
+        </div>
+        <div class="rq-field">
+          <span class="rq-label">География</span>
+          <div class="cs" id="cs-rq-geo" onclick="csToggle('rq-geo')"><span class="cs-trigger" id="cs-rq-geo-label">— любая —</span><span class="cs-arrow icon" data-icon="chevron"></span></div>
+          <select id="rq-geo" style="display:none">
+            <option value="">— любая —</option>
+            <option value="RU">Отечественная (РФ)</option>
+            <option value="world">Мировая практика</option>
+          </select>
+        </div>
+        <div class="rq-btns">
+          <button class="rq-btn-primary" onclick="runResearchQuery()">Найти</button>
+          <button class="rq-btn-reset" onclick="resetResearch()">Сброс</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ct">Результаты</div>
+        <div id="rq-results"><div class="empty-hint">Задайте параметры выше — материал, процесс, условие, числовой диапазон, географию — и нажмите «Найти». Граф подсветит все связанные узлы.</div></div>
+      </div>
+    </div>
+
+    <!-- ═══ ANALYTICS TAB ═══ -->
+    <div id="pane-analytics" style="display:none">
+      <div class="card">
+        <div class="ct">Аналитические инструменты</div>
+        <div class="aif"><div class="aii"><span class="icon lg" data-icon="gap"></span></div><div><div class="ain">Пробелы в знаниях</div><div class="aid">Явные пробелы из источников + слабо изученные материалы</div><button class="aib" onclick="openModal('gaps')">Открыть</button></div></div>
+        <div class="aif"><div class="aii"><span class="icon lg" data-icon="warning"></span></div><div><div class="ain">Карта противоречий</div><div class="aid">Пары выводов с конфликтующими результатами (CONTRADICTS)</div><button class="aib" onclick="openModal('contradictions')">Открыть</button></div></div>
+        <div class="aif"><div class="aii"><span class="icon lg" data-icon="grid"></span></div><div><div class="ain">Карта Материал × Условие</div><div class="aid">Матрица изученности комбинаций</div><button class="aib" onclick="openModal('heatmap')">Показать</button></div></div>
+        <div class="aif"><div class="aii"><span class="icon lg" data-icon="globe"></span></div><div><div class="ain">География: РФ vs мир</div><div class="aid">Где отечественный опыт отсутствует полностью — по кластерам</div><button class="aib" onclick="openModal('geogaps')">Открыть</button></div></div>
+        <div class="aif"><div class="aii"><span class="icon lg" data-icon="users"></span></div><div><div class="ain">Институциональная память</div><div class="aid">Кто держит экспертизу и риск её потери при уходе</div><button class="aib" onclick="openModal('experts')">Открыть</button></div></div>
+      </div>
+    </div>
+
+    <div style="height:20px"></div>
+  </div>
+</div>
+
+<div id="modal" onclick="if(event.target===this)closeModal()">
+  <div id="mbox">
+    <div id="mhd">
+      <span id="mtitle"></span>
+      <button id="mclose" onclick="closeModal()"><span class="icon" data-icon="close"></span></button>
+    </div>
+    <div id="mbody"></div>
+  </div>
+</div>
+
+<script src="icons.js"></script>
+<script src="data.js"></script>
+<script src="corpus.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

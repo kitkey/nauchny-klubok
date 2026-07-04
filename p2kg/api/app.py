@@ -12,6 +12,7 @@ import traceback
 
 from fastapi import BackgroundTasks, Body, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from ..config import Config
 from . import service
@@ -21,6 +22,10 @@ _STATIC = pathlib.Path(__file__).resolve().parent / "static"
 _UPLOADS = pathlib.Path("data/uploads")
 
 app = FastAPI(title="Научный клубок")
+
+# Граф-эксплорер (фронт команды) как отдельная полноэкранная страница; чат внутри идёт в наш /ask
+if (_STATIC / "explore").is_dir():
+    app.mount("/explore", StaticFiles(directory=str(_STATIC / "explore"), html=True), name="explore")
 
 
 def _control():
