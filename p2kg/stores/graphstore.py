@@ -290,6 +290,31 @@ class Neo4jGraph:
                                              year=r["year"], quantity=q, participants=parts)
         return out
 
+    def facts_needing_verification(self, uuids) -> list:
+        """Из набора uuid — факты, которые ещё НЕ проверялись (status='unverified' и без флага v_checked).
+        Для ленивой верификации в момент ответа."""
+        if not uuids:
+            return []
+        with self._driver.session() as s:
+            rows = s.run(
+                "MATCH (f:Fact) WHERE f.uuid IN $u "
+                + ("AND f.graph_id=$gid " if self._gid else "")
+                + "AND f.status='unverified' AND coalesce(f.v_checked,false)=false "
+                "RETURN f.uuid AS uuid, f.statement AS statement, f.paper_ref AS paper_ref, f.q_raw AS qraw",
+                u=list(uuids), gid=self._gid)
+            return [dict(r) for r in rows]
+
+    def set_fact_verification(self, rows) -> None:
+        """Записать результат ленивой верификации: status + флаг v_checked (повторно не гоняем) + скор/обоснование."""
+        if not rows:
+            return
+        with self._driver.session() as s:
+            s.run(
+                "UNWIND $rows AS r MATCH (f:Fact {uuid:r.uuid}) "
+                + ("WHERE f.graph_id=$gid " if self._gid else "")
+                + "SET f.status=r.status, f.v_checked=true, f.v_conf=r.conf, f.v_rationale=r.rationale",
+                rows=list(rows), gid=self._gid)
+
     def delete_paper(self, paper_ref: str) -> None:
         """Удалить факты документа и их сущности (супрессессия старой версии). uuid уникальны на док,
         поэтому сущности факта принадлежат только ему -> DETACH DELETE безопасен."""

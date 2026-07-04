@@ -18,6 +18,7 @@ class Config(BaseModel):
     verify_rel_floor: float = 0.4   # verified требует ещё и relevance >= floor (не пускать оффдомен)
     skip_roles: bool = False   # bulk: не гонять S2 roles (граф их не использует) — минус полный проход по тексту
     skip_verify: bool = False  # bulk: не гонять S5 verify (факты остаются unverified) — верифицируем лениво по запросу
+    verify_on_read: bool = True  # ленивая верификация: факты, попавшие в ответ, проверяются 1 раз и статус кэшируется в граф
     resolve_mode: str = "llm"  # "llm" (LLM-кластеризация+иерархия) | "embed" (эмбеддинг-блокинг дедуп, дёшево/быстро)
     use_rudder: bool = False
     use_llm_structure: bool = False

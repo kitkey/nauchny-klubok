@@ -353,6 +353,13 @@ def _trace_graph(res: RetrieveResult) -> dict:
 def answer(deps, question: str, *, k: int = 16) -> dict:
     """Полный путь: ретрив + LLM-синтез. Числа — из evidence, не из модели. + подграф трейса."""
     res = retrieve(deps, question, k=k)
+    # ленивая верификация: факты из ответа проверяются 1 раз и статус кэшируется в граф (v_checked)
+    if getattr(getattr(deps, "cfg", None), "verify_on_read", False):
+        try:
+            from .verify import verify_on_read
+            verify_on_read(deps, res.facts)
+        except Exception:
+            pass
     evidence = [{"statement": e.statement, "value": e.quantity, "participants": e.participants,
                  "source": e.source, "year": e.year, "status": e.status} for e in res.facts]
     text = ""

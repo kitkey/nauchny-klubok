@@ -47,3 +47,49 @@ def test_verify_skips_contested():
     st = ArticleState(paper_ref="p", facts=[_fact("f1", status=FactStatus.CONTESTED)])
     s5_verify(_deps([_VerifyItem(id=0, confidence=0.9, clarity=0.9, relevance=0.9)]), st)
     assert st.facts[0].status == FactStatus.CONTESTED
+
+
+# ---------------- ленивая верификация в момент ответа ----------------
+from types import SimpleNamespace  # noqa: E402
+
+from p2kg.verify import verify_on_read  # noqa: E402
+
+
+class _FakeGraph:
+    def __init__(self):
+        self.saved = None
+
+    def facts_needing_verification(self, uuids):
+        return [{"uuid": "f1", "statement": "катодит циркулирует со скоростью 5 л/мин", "paper_ref": "p", "qraw": None},
+                {"uuid": "f2", "statement": "совершенно не относящийся текст", "paper_ref": "p", "qraw": None}]
+
+    def set_fact_verification(self, rows):
+        self.saved = list(rows)
+
+
+class _FakeDocs:
+    def get_units(self, ref):
+        return [SimpleNamespace(text="катодит циркулирует со скоростью 5 л/мин в электролизной ячейке")]
+
+    def get_paper(self, ref):
+        return SimpleNamespace(raw_text="катодит циркулирует со скоростью 5 л/мин в электролизной ячейке")
+
+
+def test_verify_on_read_caches_and_mutates():
+    g = _FakeGraph()
+    deps = Deps(llm=FakeLLM([_VerifyItem(id=0, confidence=0.9, clarity=0.9, relevance=0.9, rationale="ok"),
+                             _VerifyItem(id=1, confidence=0.1, clarity=0.1, relevance=0.1)]),
+                embed=None, prompts=PromptManager(), cfg=Config(), graph=g, docs=_FakeDocs())
+    ev = [SimpleNamespace(uuid="f1", status="unverified"), SimpleNamespace(uuid="f2", status="unverified")]
+    n = verify_on_read(deps, ev)
+    assert n == 1
+    assert ev[0].status == "verified" and ev[1].status == "unverified"
+    # оба помечены как проверенные (кэш) — повторно гоняться не будут
+    assert g.saved is not None and len(g.saved) == 2
+    byid = {r["uuid"]: r for r in g.saved}
+    assert byid["f1"]["status"] == "verified" and byid["f2"]["status"] == "unverified"
+
+
+def test_verify_on_read_noop_without_graph_methods():
+    deps = Deps(llm=FakeLLM([]), embed=None, prompts=PromptManager(), cfg=Config(), graph=None, docs=None)
+    assert verify_on_read(deps, [SimpleNamespace(uuid="x", status="unverified")]) == 0
