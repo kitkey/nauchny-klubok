@@ -1,0 +1,5 @@
+{% for f in facts %}--- факт id={{ f.id }} ---
+Факт: "{{ f.statement }}"
+Значение: {{ f.quantity }}
+Исходный фрагмент: "{{ f.source | default("") }}"
+{% endfor %}

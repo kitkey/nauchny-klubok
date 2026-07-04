@@ -1,0 +1,5 @@
+Сущности-участники: {{ participants | join(", ") }}
+
+Факты (используй id в ответе как есть):
+{% for f in facts %}- id={{ f.id }}: "{{ f.statement }}"{% if f.value %}  [значение: {{ f.value }}]{% endif %}
+{% endfor %}

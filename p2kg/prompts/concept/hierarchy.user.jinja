@@ -1,0 +1,9 @@
+Концепт C: "{{ concept }}"
+контекст C: {{ concept_context | default("—") }}
+
+Близкие концепты-кандидаты:
+{% for c in candidates %}- id={{ c.id }}: "{{ c.name }}"
+    контекст: {{ c.context | default("—") }}
+{% endfor %}
+
+Для каждого кандидата дай отношение к C: parent (кандидат общее, C ⊂ кандидат) | child (кандидат ⊂ C) | same | none.

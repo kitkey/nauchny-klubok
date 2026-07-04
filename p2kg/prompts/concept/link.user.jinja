@@ -1,0 +1,10 @@
+Упоминание: "{{ mention }}"
+{% if aliases %}Варианты написания: {{ aliases | join("; ") }}{% endif %}
+Контекст из статьи: {{ context | default("—") }}
+
+Концепты-кандидаты (уже в графе):
+{% for c in candidates %}- id={{ c.id }}: "{{ c.name }}"{% if c.aliases %} (варианты: {{ c.aliases | join("; ") }}){% endif %}
+    контекст: {{ c.context | default("—") }}
+{% endfor %}
+
+Это один из кандидатов (верни его id) или новый концепт (null)?

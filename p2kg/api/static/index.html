@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Научный клубок</title>
+<style>
+  :root{--bg:#0f1216;--panel:#171b22;--panel2:#1e242d;--line:#2a313c;--fg:#e6e9ee;--mut:#9aa4b2;
+        --acc:#4c8bf5;--good:#3fb06a;--warn:#e0a53f;--bad:#e5604d;}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg);
+       display:flex;height:100vh;overflow:hidden}
+  aside{width:290px;min-width:290px;background:var(--panel);border-right:1px solid var(--line);
+        display:flex;flex-direction:column;overflow:auto}
+  main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  h1{font-size:15px;margin:0;padding:14px 16px;border-bottom:1px solid var(--line);letter-spacing:.3px}
+  h1 small{color:var(--mut);font-weight:400}
+  .sec{padding:12px 16px;border-bottom:1px solid var(--line)}
+  .sec>label{display:block;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+  input,button,select,textarea{font:inherit;color:var(--fg);background:var(--panel2);border:1px solid var(--line);
+        border-radius:8px;padding:8px 10px;outline:none}
+  input:focus,textarea:focus{border-color:var(--acc)}
+  button{cursor:pointer;background:var(--acc);border-color:var(--acc);color:#fff}
+  button.ghost{background:var(--panel2);border-color:var(--line);color:var(--fg)}
+  button:hover{filter:brightness(1.08)}
+  .row{display:flex;gap:8px}.row>*{flex:1}
+  .list{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+  .item{padding:8px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+  .item:hover{background:var(--panel2)}
+  .item.active{background:var(--panel2);border-color:var(--acc)}
+  .item small{color:var(--mut)}
+  .tree{margin-left:12px;border-left:1px solid var(--line);padding-left:8px}
+  header.top{padding:12px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+  .tabs{display:flex;gap:6px}
+  .tab{padding:7px 14px;border-radius:8px;background:var(--panel);border:1px solid var(--line);cursor:pointer}
+  .tab.active{background:var(--acc);border-color:var(--acc);color:#fff}
+  .body{flex:1;overflow:auto;padding:20px}
+  .muted{color:var(--mut)}
+  .empty{color:var(--mut);text-align:center;margin-top:60px}
+  .drop{border:1px dashed var(--line);border-radius:12px;padding:22px;text-align:center;background:var(--panel)}
+  .jobs{margin-top:14px;display:flex;flex-direction:column;gap:6px}
+  .job{display:flex;justify-content:space-between;padding:8px 12px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+  .badge{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--panel2);border:1px solid var(--line)}
+  .badge.good{color:var(--good);border-color:var(--good)}
+  .badge.warn{color:var(--warn);border-color:var(--warn)}
+  .badge.bad{color:var(--bad);border-color:var(--bad)}
+  .askbar{display:flex;gap:10px}.askbar textarea{flex:1;resize:vertical;min-height:52px}
+  .answer{margin-top:18px;padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;white-space:pre-wrap}
+  .cards{margin-top:16px;display:grid;gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .card.contested{border-color:var(--bad)}
+  .val{font-weight:700;color:#fff;background:var(--panel2);border:1px solid var(--acc);border-radius:8px;padding:2px 8px;display:inline-block}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .chip{font-size:12px;padding:2px 9px;border-radius:20px;background:var(--panel2);border:1px solid var(--line)}
+  .chip b{color:var(--mut);font-weight:600;margin-right:4px}
+  .src{margin-top:10px;font-size:12px}
+  .src a{color:var(--acc);cursor:pointer;text-decoration:none}
+  .related{margin-top:14px}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:40px}
+  .modal.open{display:flex}
+  .sheet{background:var(--panel);border:1px solid var(--line);border-radius:12px;max-width:820px;width:100%;max-height:80vh;overflow:auto;padding:20px}
+  .sheet pre{white-space:pre-wrap;word-break:break-word;color:var(--fg);font:13px/1.55 ui-monospace,monospace}
+  .x{float:right;cursor:pointer;color:var(--mut)}
+</style>
+</head>
+<body>
+<aside>
+  <h1>🧶 Научный клубок</h1>
+  <div class="sec" style="flex:1">
+    <label>Графы знаний</label>
+    <div id="graphs" class="list"></div>
+    <div class="row" style="margin-top:8px">
+      <input id="graphName" placeholder="Новый граф">
+      <button onclick="createGraph()">+</button>
+    </div>
+  </div>
+</aside>
+
+<main>
+  <header class="top">
+    <div id="gtitle" class="muted">Выберите или создайте граф</div>
+    <div style="flex:1"></div>
+    <div class="tabs">
+      <div class="tab active" data-tab="ask" onclick="tab('ask')">Спросить</div>
+      <div class="tab" data-tab="docs" onclick="tab('docs')">Документы</div>
+      <div class="tab" data-tab="trace" onclick="tab('trace')">Трейс</div>
+      <div class="tab" data-tab="dashboard" onclick="tab('dashboard')">Дашборд</div>
+    </div>
+  </header>
+  <div class="body">
+    <div id="tab-ask">
+      <div class="askbar">
+        <textarea id="q" placeholder="Напр.: что делали по сплаву X при отжиге ~1050°C и как это влияло на предел текучести?"></textarea>
+        <button onclick="ask()">Найти</button>
+      </div>
+      <div id="answer"></div>
+    </div>
+
+    <div id="tab-docs" style="display:none">
+      <div class="drop">
+        <input type="file" id="file" accept=".pdf">
+        <button onclick="upload()" style="margin-left:8px">Загрузить документ</button>
+        <div class="muted" style="margin-top:8px">Сегодня обрабатывается PDF. Ингест идёт фоном.</div>
+      </div>
+      <div id="jobs" class="jobs"></div>
+    </div>
+
+    <div id="tab-dashboard" style="display:none">
+      <div id="dash"><div class="muted">выберите граф</div></div>
+    </div>
+
+    <div id="tab-trace" style="display:none">
+      <div class="muted" style="margin-bottom:8px">Из каких фактов и сущностей собран последний ответ. Наведи — детали; <b>клик по узлу → обзор по нему и следующий вопрос от него</b> (углубляйся по клубку).</div>
+      <div id="glegend" class="chips" style="margin-bottom:8px"></div>
+      <svg id="tracesvg" width="100%" height="560" style="border:1px solid var(--line);border-radius:12px;background:var(--panel)"></svg>
+    </div>
+  </div>
+</main>
+
+<div class="modal" id="modal"><div class="sheet">
+  <span class="x" onclick="closeModal()">✕ закрыть</span>
+  <h3 id="docTitle"></h3><pre id="docBody"></pre>
+</div></div>
+
+<script>
+const USER = "demo";   // разграничение доступа убрано — единый пользователь
+let GID = null;
+
+function api(path, opts={}){
+  opts.headers = Object.assign({"X-User": USER, "Content-Type":"application/json"}, opts.headers||{});
+  return fetch(path, opts).then(async r=>{ if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail||r.status); return r.json(); });
+}
+function tab(name){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.tab===name));
+  ["ask","docs","dashboard","trace"].forEach(n=>document.getElementById("tab-"+n).style.display = n===name?"":"none");
+  if(name==="docs" && GID) pollStatus();
+  if(name==="trace") renderGraph();
+  if(name==="dashboard") loadStats();
+}
+
+async function loadAll(){ await loadGraphs(); }
+
+async function loadGraphs(){
+  const d = await api("/api/graphs");
+  document.getElementById("graphs").innerHTML = d.graphs.length
+    ? d.graphs.map(g=>`<div class="item ${g.id===GID?"active":""}" onclick="selectGraph('${g.id}','${esc(g.name)}')">${esc(g.name)} <small>#${g.id.slice(0,4)}</small></div>`).join("")
+    : `<div class="muted">нет доступных графов</div>`;
+}
+async function createGraph(){
+  const name=document.getElementById("graphName").value.trim(); if(!name) return;
+  try{ const r=await api("/api/graphs",{method:"POST",body:JSON.stringify({name})});
+       document.getElementById("graphName").value=""; await loadGraphs(); selectGraph(r.id,name); }
+  catch(e){ alert("Не удалось: "+e.message+"\n(создайте команду и станьте её членом)"); }
+}
+function selectGraph(id,name){ GID=id; document.getElementById("gtitle").textContent="Граф: "+name;
+  document.getElementById("gtitle").classList.remove("muted"); loadGraphs(); tab("ask"); document.getElementById("answer").innerHTML=""; }
+
+async function upload(){
+  if(!GID) return alert("выберите граф");
+  const f=document.getElementById("file").files[0]; if(!f) return;
+  const fd=new FormData(); fd.append("file",f);
+  await fetch(`/api/graphs/${GID}/docs`,{method:"POST",headers:{"X-User":USER},body:fd}).then(r=>r.json());
+  document.getElementById("file").value=""; pollStatus();
+}
+async function pollStatus(){
+  if(!GID) return; const d=await api(`/api/graphs/${GID}/status`);
+  const badge=s=>({done:"good",error:"bad",unsupported:"warn",processing:"warn",queued:""}[s]||"");
+  document.getElementById("jobs").innerHTML = d.jobs.map(j=>
+    `<div class="job"><span>${esc(j.file)} ${j.facts!=null?`<small class="muted">· ${j.facts} фактов, ${j.entities} сущн.</small>`:""}</span>
+       <span class="badge ${badge(j.state)}">${j.state}${j.error?": "+esc(j.error):""}</span></div>`).join("")
+    || `<div class="muted">пока пусто</div>`;
+  if(d.jobs.some(j=>["queued","processing"].includes(j.state))) setTimeout(pollStatus,2500);
+}
+
+async function ask(){
+  if(!GID) return alert("выберите граф");
+  const q=document.getElementById("q").value.trim(); if(!q) return;
+  const box=document.getElementById("answer"); box.innerHTML=`<div class="muted">ищу…</div>`;
+  try{
+    const d=await api(`/api/graphs/${GID}/ask`,{method:"POST",body:JSON.stringify({question:q})});
+    renderAnswer(d);
+  }catch(e){ box.innerHTML=`<div class="badge bad">ошибка: ${esc(e.message)}</div>`; }
+}
+function renderAnswer(d){
+  window.lastGraph = d.graph; window.lastAnswer = d;
+  const box=document.getElementById("answer");
+  let html = d.answer ? `<div style="text-align:right;margin-bottom:6px"><button class="ghost" onclick="exportMD()">⬇ Экспорт MD</button></div><div class="answer">${esc(d.answer)}</div>` : "";
+  html += `<div class="cards">` + (d.evidence||[]).map(e=>{
+    const chips=Object.entries(e.participants||{}).flatMap(([t,ns])=>ns.map(n=>`<span class="chip"><b>${esc(t)}</b>${esc(n)}</span>`)).join("");
+    const contested = (e.status||"").includes("contested");
+    return `<div class="card ${contested?"contested":""}">
+      <div>${esc(e.statement||"")} ${e.value?`<span class="val">${esc(e.value)}</span>`:""}</div>
+      <div class="chips">${chips}</div>
+      <div class="src">
+        ${e.source?`источник: <a onclick="openDoc('${encodeURIComponent(e.source)}')">${esc(e.source)}</a>`:""}
+        ${e.year?` · ${e.year}`:""}
+        ${e.status?` · <span class="badge ${contested?"bad":"good"}">${esc(e.status)}</span>`:""}
+      </div></div>`;
+  }).join("") + `</div>`;
+  if(d.sources && d.sources.length)
+    html += `<div class="related"><span class="muted">файлы-источники ответа: </span>`+d.sources.map(s=>`<a class="chip" style="cursor:pointer" onclick="openDoc('${encodeURIComponent(s.file)}')">${esc(s.file)} <b class="muted">·${s.facts}</b></a>`).join(" ")+`</div>`;
+  if(d.related && d.related.length)
+    html += `<div class="related"><span class="muted">связанные: </span>${d.related.map(n=>`<span class="chip">${esc(n)}</span>`).join(" ")}</div>`;
+  if(!(d.evidence||[]).length) html += `<div class="empty">ничего не нашлось — возможно, по этой комбинации нет данных (пробел)</div>`;
+  box.innerHTML = html;
+}
+
+async function grant(kind){
+  if(!GID) return; const v=document.getElementById(kind==="user"?"grantUser":"grantTeam").value.trim(); if(!v) return;
+  await api(`/api/graphs/${GID}/grant`,{method:"POST",body:JSON.stringify({[kind]:v})}); alert("доступ выдан");
+}
+
+async function openDoc(ref){
+  try{ const d=await api(`/api/graphs/${GID}/docs/${ref}`);
+       document.getElementById("docTitle").textContent=(d.title||d.paper_ref)+(d.year?` (${d.year})`:"");
+       document.getElementById("docBody").textContent=d.raw_text||"";
+       document.getElementById("modal").classList.add("open"); }
+  catch(e){ alert("документ не найден: "+e.message); }
+}
+function exploreNode(i){
+  const n=(window._tnodes||[])[i]; if(!n) return;
+  const q = n.kind==="Fact"
+    ? ("Что ещё известно по теме: "+(n.label||""))
+    : ("Что известно про «"+(n.label||"")+"»? Какие методы, условия, показатели и где применяют.");
+  document.getElementById("q").value=q; tab("ask"); ask();
+}
+function closeModal(){ document.getElementById("modal").classList.remove("open"); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+const KIND_COLOR={Fact:"#4c8bf5",Material:"#3fb06a",Property:"#e0a53f",Process:"#b06ad6",Condition:"#46b3c9",Technique:"#c98a46",Equipment:"#d6675a",Location:"#8a9bb3",Person:"#d64f9a",Facility:"#7a8ce0",Element:"#6ac0a0"};
+function renderGraph(){
+  const svg=document.getElementById("tracesvg"); if(!svg) return;
+  const g=window.lastGraph, leg=document.getElementById("glegend");
+  if(!g||!g.nodes||!g.nodes.length){ svg.innerHTML='<text x="20" y="30" fill="#9aa4b2">Сначала задайте вопрос во вкладке «Спросить».</text>'; leg.innerHTML=""; return; }
+  const W=svg.clientWidth||900, H=560;
+  const nodes=g.nodes.map(n=>({...n})), idx={}; nodes.forEach((n,i)=>idx[n.id]=i);
+  const edges=(g.edges||[]).filter(e=>idx[e.src]!=null&&idx[e.dst]!=null).map(e=>({s:idx[e.src],t:idx[e.dst]}));
+  nodes.forEach((n,i)=>{const a=2*Math.PI*i/nodes.length; n.x=W/2+Math.cos(a)*Math.min(W,H)*0.34; n.y=H/2+Math.sin(a)*Math.min(W,H)*0.34; n.vx=0; n.vy=0;});
+  for(let it=0; it<240; it++){
+    for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
+      let dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y, d2=dx*dx+dy*dy+0.01, d=Math.sqrt(d2), f=1500/d2; dx/=d; dy/=d;
+      nodes[i].vx+=dx*f; nodes[i].vy+=dy*f; nodes[j].vx-=dx*f; nodes[j].vy-=dy*f; }
+    edges.forEach(e=>{let a=nodes[e.s],b=nodes[e.t],dx=b.x-a.x,dy=b.y-a.y,d=Math.sqrt(dx*dx+dy*dy)+0.01,f=(d-95)*0.02; dx/=d;dy/=d; a.vx+=dx*f;a.vy+=dy*f;b.vx-=dx*f;b.vy-=dy*f;});
+    nodes.forEach(n=>{n.vx+=(W/2-n.x)*0.002; n.vy+=(H/2-n.y)*0.002; n.x+=Math.max(-8,Math.min(8,n.vx)); n.y+=Math.max(-8,Math.min(8,n.vy)); n.vx*=0.85; n.vy*=0.85; n.x=Math.max(20,Math.min(W-20,n.x)); n.y=Math.max(20,Math.min(H-20,n.y));});
+  }
+  const lines=edges.map(e=>`<line x1="${nodes[e.s].x}" y1="${nodes[e.s].y}" x2="${nodes[e.t].x}" y2="${nodes[e.t].y}" stroke="#2a313c"/>`).join("");
+  window._tnodes=nodes;
+  const circ=nodes.map((n,i)=>{
+    const isFact=n.kind==="Fact", r=isFact?9:6, c=KIND_COLOR[n.kind]||"#9aa4b2";
+    const t=(n.label||"").slice(0,isFact?34:22);
+    const title=esc((isFact?((n.label||"")+(n.value?" ["+n.value+"]":"")+" — "+(n.source||"")):n.kind+": "+n.label)+"  · клик: обзор + вопрос от узла");
+    return `<g onclick="exploreNode(${i})" style="cursor:pointer"><title>${title}</title><circle cx="${n.x}" cy="${n.y}" r="${r}" fill="${c}" stroke="#0f1216" stroke-width="1.5"/><text x="${n.x+r+3}" y="${n.y+4}" font-size="11" fill="#c9d1da">${esc(t)}</text></g>`;
+  }).join("");
+  svg.innerHTML=lines+circ;
+  const kinds=[...new Set(nodes.map(n=>n.kind))];
+  leg.innerHTML=kinds.map(k=>`<span class="chip"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${KIND_COLOR[k]||'#9aa4b2'};margin-right:5px"></span>${esc(k)}</span>`).join("");
+}
+
+async function loadStats(){
+  const box=document.getElementById("dash"); if(!GID){ box.innerHTML='<div class="muted">выберите граф</div>'; return; }
+  box.innerHTML='<div class="muted">считаю…</div>';
+  try{
+    const s=await api(`/api/graphs/${GID}/stats`);
+    const bar=(o)=>{const m=Math.max(1,...Object.values(o||{})); return Object.entries(o||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div style="display:flex;align-items:center;gap:8px;margin:3px 0"><div style="width:150px" class="muted">${esc(k)}</div><div style="height:14px;background:var(--acc);border-radius:3px;width:${Math.round(v/m*240)}px"></div><div>${v}</div></div>`).join("");};
+    box.innerHTML=`
+      <div style="text-align:right;margin-bottom:6px"><button class="ghost" onclick="loadStats()">↻ обновить</button></div>
+      <div class="cards" style="grid-template-columns:repeat(4,1fr)">
+        ${[["сущностей",s.total_entities],["фактов",s.total_facts],["источников",s.n_sources],["спорных",s.contested]].map(([l,v])=>`<div class="card" style="text-align:center"><div class="val" style="font-size:22px">${v??0}</div><div class="muted">${l}</div></div>`).join("")}
+      </div>
+      <div class="card" style="margin-top:12px"><b>Сущности по типам</b>${bar(s.entities_by_type)}</div>
+      <div class="card" style="margin-top:12px"><b>Факты по типам</b>${bar(s.facts_by_frame)}</div>
+      <div class="card" style="margin-top:12px"><b>Покрытие по источникам</b> <span class="muted">(мало фактов = тема слабо освещена)</span>
+        ${(s.facts_by_source||[]).map(x=>`<div style="display:flex;justify-content:space-between;margin:2px 0"><a onclick="openDoc('${encodeURIComponent(x.source)}')" style="cursor:pointer;color:var(--acc)">${esc(x.source)}</a><span>${x.facts}</span></div>`).join("")}</div>
+      <div class="card" style="margin-top:12px"><b>Топ сущностей</b><div class="chips" style="margin-top:6px">${(s.top_entities||[]).map(x=>`<span class="chip"><b>${esc(x.type)}</b>${esc(x.name)} ·${x.facts}</span>`).join(" ")}</div></div>`;
+  }catch(e){ box.innerHTML=`<div class="badge bad">${esc(e.message)}</div>`; }
+}
+function exportMD(){
+  const d=window.lastAnswer; if(!d) return;
+  let md=`# Ответ на запрос\n\n**Вопрос:** ${d.question}\n\n${d.answer||""}\n\n## Факты (${(d.evidence||[]).length})\n`;
+  (d.evidence||[]).forEach(e=>{md+=`- ${e.statement||""}${e.value?` (**${e.value}**)`:""} — _${e.source||""}_ [${e.status||""}]\n`;});
+  md+=`\n## Файлы-источники\n`+(d.sources||[]).map(s=>`- ${s.file} (${s.facts} фактов)`).join("\n")+"\n";
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([md],{type:"text/markdown"}));
+  a.download="otvet.md"; a.click();
+}
+
+loadAll();
+</script>
+</body>
+</html>

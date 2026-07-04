@@ -1,0 +1,4 @@
+Тезис: "{{ claim }}"
+Измерения-кандидаты:
+{% for e in evidence %}- id={{ e.id }}: {{ e.text }}
+{% endfor %}

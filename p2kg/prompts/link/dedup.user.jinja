@@ -1,0 +1,4 @@
+{% for p in pairs %}--- пара id={{ p.id }} ---
+A: "{{ p.a }}"  (контекст: "{{ p.a_ctx | default("") }}")
+B: "{{ p.b }}"  (контекст: "{{ p.b_ctx | default("") }}")
+{% endfor %}
